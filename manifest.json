@@ -1,0 +1,13 @@
+{
+    "display_name": "润色插件",
+    "loading_order": 10,
+    "requires": [],
+    "optional": [],
+    "js": "index.js",
+    "css": "style.css",
+    "hooks": {
+        "activate": "init"
+    },
+    "author": "ChengZengJie",
+    "version": "1.0.0"
+}
