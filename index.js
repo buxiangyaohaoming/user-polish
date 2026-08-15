@@ -491,7 +491,7 @@ async function polishText(original, opts) {
             let refText = '';
             if (opts && opts.giveRef) {
                 refText = opts.refText ? String(opts.refText).trim() : '';
-                if (!refText && opts.floorId) refText = getMessageTextById(opts.floorId);
+                if (!refText && opts.floor) refText = getMessageTextByFloor(opts.floor);
             }
             if (refText) {
                 userPrompt += '\n\n【参考内容(仅参考其语气、风格与表达方式,内容与润色目标无关)】\n' + refText;
@@ -545,7 +545,7 @@ async function polishText(original, opts) {
 
 /* ---------------- 润色确认框 ---------------- */
 
-/** 收集最近的 AI 发言楼层(供参考选择,最多 30 条) */
+/** 收集最近的 AI 发言楼层(供参考选择,最多 30 条)。以楼层号(消息数组索引+1)标识,不依赖消息 id(部分聊天记录无 id 字段) */
 function buildAiFloorOptions() {
     const context = getContext();
     const chat = context && Array.isArray(context.chat) ? context.chat : [];
@@ -557,16 +557,18 @@ function buildAiFloorOptions() {
             ? String(m.swipes[m.swipes.length - 1] ?? '')
             : String(m.mes ?? '');
         if (!text.trim()) continue;
-        opts.unshift({ id: m.id ? String(m.id) : '', floor: i + 1, name: m.name || 'AI', preview: truncate(text, 25) });
+        opts.unshift({ floor: i + 1, name: m.name || 'AI', preview: truncate(text, 25) });
     }
     return opts;
 }
 
-function getMessageTextById(id) {
-    if (!id) return '';
+/** 按楼层号(消息数组索引+1)取消息文本 */
+function getMessageTextByFloor(floor) {
+    const n = parseInt(floor, 10);
+    if (!Number.isFinite(n) || n < 1) return '';
     const context = getContext();
     const chat = context && Array.isArray(context.chat) ? context.chat : [];
-    const m = chat.find(m => m && String(m.id) === String(id));
+    const m = chat[n - 1];
     if (!m) return '';
     return (Array.isArray(m.swipes) && m.swipes.length > 0)
         ? String(m.swipes[m.swipes.length - 1] ?? '')
@@ -575,13 +577,12 @@ function getMessageTextById(id) {
 
 /**
  * 润色确认框:确认是否润色 + 是否给出参考 + 选择参考楼层(AI 输出风格)。
- * 返回 { giveRef, floorId } 或 null(用户取消)
+ * 返回 { giveRef, refText, floor } 或 null(用户取消)
  */
 async function showPolishConfirm() {
     const floors = buildAiFloorOptions();
     const floorOptions = floors.map(f => {
-        if (!f.id) return '';
-        return `<option value="${escapeHtml(f.id)}">#${f.floor} ${escapeHtml(f.name)}: ${escapeHtml(f.preview)}</option>`;
+        return `<option value="${f.floor}">#${f.floor} ${escapeHtml(f.name)}: ${escapeHtml(f.preview)}</option>`;
     }).join('');
     const html = `
     <div class="up-confirm">
@@ -612,7 +613,7 @@ async function showPolishConfirm() {
             const $preview = $('#up_cf_preview');
             const updatePreview = () => {
                 const manual = String($refText.val() || '').trim();
-                const id = String($floor.val() || '');
+                const floor = parseInt($floor.val(), 10);
                 if (!$ref.prop('checked')) {
                     $preview.text('');
                     return;
@@ -621,8 +622,8 @@ async function showPolishConfirm() {
                     $preview.text('参考内容: ' + truncate(manual, 80));
                     return;
                 }
-                if (id) {
-                    const text = getMessageTextById(id);
+                if (Number.isFinite(floor) && floor >= 1) {
+                    const text = getMessageTextByFloor(floor);
                     $preview.text(text ? '参考内容: ' + truncate(text, 80) : '');
                     return;
                 }
@@ -650,7 +651,7 @@ async function showPolishConfirm() {
     return {
         giveRef: $('#up_cf_ref').prop('checked'),
         refText: String($('#up_cf_ref_text').val() || '').trim(),
-        floorId: String($('#up_cf_floor').val() || ''),
+        floor: parseInt($('#up_cf_floor').val(), 10) || 0,
     };
 }
 
